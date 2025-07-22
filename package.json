@@ -10,7 +10,8 @@
     "dev": "node --loader ts-node/esm src/api/app.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "package": "npm run build && sam build",
-    "deploy": "sam deploy --guided"
+    "deploy": "sam deploy --guided",
+    "upload-questions": "node --loader ts-node/esm src/scripts/uploadQuestionsToS3.ts"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -25,6 +26,7 @@
   "author": "Your Name",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.850.0",
     "@types/aws-lambda": "^8.10.119",
     "cors": "^2.8.5",
     "express": "^4.18.2",

@@ -1,10 +1,4 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-// Helper to get __dirname in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// No file system imports needed
 
 export enum LogLevel {
   ERROR = 0,
@@ -14,90 +8,8 @@ export enum LogLevel {
 }
 
 class Logger {
-  private logDir: string;
-  private currentLogFile: string;
-  private maxFileSize: number = 10 * 1024 * 1024; // 10MB
-  private maxFiles: number = 5;
-
   constructor() {
-    this.logDir = path.join(__dirname, '../../logs');
-    this.currentLogFile = this.getLogFileName();
-    this.ensureLogDirectory();
-  }
-
-  private getLogFileName(): string {
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
-    return `pmp-service-${dateStr}.log`;
-  }
-
-  private async ensureLogDirectory(): Promise<void> {
-    try {
-      await fs.access(this.logDir);
-    } catch {
-      await fs.mkdir(this.logDir, { recursive: true });
-    }
-  }
-
-  private async rotateLogFile(): Promise<void> {
-    try {
-      const logPath = path.join(this.logDir, this.currentLogFile);
-      const stats = await fs.stat(logPath);
-      
-      if (stats.size > this.maxFileSize) {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const rotatedFileName = `${this.currentLogFile.replace('.log', '')}-${timestamp}.log`;
-        const rotatedPath = path.join(this.logDir, rotatedFileName);
-        
-        await fs.rename(logPath, rotatedPath);
-        
-        // Clean up old log files
-        await this.cleanupOldLogs();
-      }
-    } catch (error) {
-      // If file doesn't exist or other error, continue
-      console.error('Error rotating log file:', error);
-    }
-  }
-
-  private async cleanupOldLogs(): Promise<void> {
-    try {
-      const files = await fs.readdir(this.logDir);
-      const logFiles = files
-        .filter(file => file.startsWith('pmp-service-') && file.endsWith('.log'))
-        .map(file => ({
-          name: file,
-          path: path.join(this.logDir, file),
-          mtime: 0
-        }));
-
-      // Get file stats
-      for (const file of logFiles) {
-        try {
-          const stats = await fs.stat(file.path);
-          file.mtime = stats.mtime.getTime();
-        } catch {
-          // Skip files that can't be stat'd
-        }
-      }
-
-      // Sort by modification time (oldest first)
-      logFiles.sort((a, b) => a.mtime - b.mtime);
-
-      // Remove oldest files if we have too many
-      if (logFiles.length > this.maxFiles) {
-        const filesToDelete = logFiles.slice(0, logFiles.length - this.maxFiles);
-        for (const file of filesToDelete) {
-          try {
-            await fs.unlink(file.path);
-          } catch {
-            // Continue if we can't delete a file
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error cleaning up old logs:', error);
-    }
+    // No file system initialization needed
   }
 
   private formatMessage(level: LogLevel, message: string, meta?: any): string {
@@ -113,33 +25,20 @@ class Logger {
       }
     }
     
-    return formattedMessage + '\n';
-  }
-
-  private async writeToFile(message: string): Promise<void> {
-    try {
-      await this.rotateLogFile();
-      const logPath = path.join(this.logDir, this.currentLogFile);
-      await fs.appendFile(logPath, message);
-    } catch (error) {
-      console.error('Error writing to log file:', error);
-    }
+    return formattedMessage;
   }
 
   private log(level: LogLevel, message: string, meta?: any): void {
     const formattedMessage = this.formatMessage(level, message, meta);
     
-    // Always log to console
+    // Only log to console
     if (level === LogLevel.ERROR) {
-      console.error(formattedMessage.trim());
+      console.error(formattedMessage);
     } else if (level === LogLevel.WARN) {
-      console.warn(formattedMessage.trim());
+      console.warn(formattedMessage);
     } else {
-      console.log(formattedMessage.trim());
+      console.log(formattedMessage);
     }
-    
-    // Write to file
-    this.writeToFile(formattedMessage);
   }
 
   error(message: string, meta?: any): void {

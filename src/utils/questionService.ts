@@ -1,12 +1,6 @@
 import { API_CONFIG, getApiUrl } from '../config.js';
 import type { QAResponseIndividual, RetrieveParams } from '../types/index.js';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-// Get the directory name in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getFileFromS3, putFileToS3 } from './s3Service.js';
 
 // Process group to file mapping
 const PROCESS_GROUP_FILES = {
@@ -81,17 +75,16 @@ export async function retrieveRecordsFromFile({
       ? [PROCESS_GROUP_FILES[processGroup as keyof typeof PROCESS_GROUP_FILES]]
       : Object.values(PROCESS_GROUP_FILES);
     
-    console.log('Files to read:', filesToRead);
+    console.log('Files to read from S3:', filesToRead);
     
     // Read questions from all relevant files
     for (const fileName of filesToRead) {
       if (!fileName) continue;
       
       try {
-        const filePath = path.join(__dirname, '..', 'questions', fileName);
-        console.log(`Reading file: ${filePath}`);
+        console.log(`Reading file from S3: ${fileName}`);
         
-        const fileContent = await fs.readFile(filePath, 'utf-8');
+        const fileContent = await getFileFromS3(fileName);
         
         // Extract the JSON data from the TypeScript export
         const jsonMatch = fileContent.match(/export const questionsData = ({[\s\S]*});/);
@@ -107,7 +100,7 @@ export async function retrieveRecordsFromFile({
         allQuestions.push(...fileQuestions);
         
       } catch (fileError) {
-        console.error(`Error reading file ${fileName}:`, fileError);
+        console.error(`Error reading file ${fileName} from S3:`, fileError);
         continue;
       }
     }
@@ -251,10 +244,8 @@ export async function saveRecordToFile(record: QAResponseIndividual): Promise<vo
       throw new Error('Invalid process_group');
     }
     
-    const filePath = path.join(__dirname, '..', 'questions', fileName);
-    
-    // Read the current file content
-    const fileContent = await fs.readFile(filePath, 'utf-8');
+    // Read the current file content from S3
+    const fileContent = await getFileFromS3(fileName);
     
     // Extract the JSON data from the TypeScript export
     const jsonMatch = fileContent.match(/export const questionsData = ({[\s\S]*});/);
@@ -283,15 +274,15 @@ export async function saveRecordToFile(record: QAResponseIndividual): Promise<vo
       }
     };
     
-    // Write the updated content back to file
+    // Write the updated content back to S3
     const updatedContent = fileContent.replace(
       /export const questionsData = {[\s\S]*};/,
       `export const questionsData = ${JSON.stringify(data, null, 2)};`
     );
     
-    await fs.writeFile(filePath, updatedContent, 'utf-8');
+    await putFileToS3(fileName, updatedContent);
     
-    console.log(`✅ Record ${id} updated successfully in ${fileName}`);
+    console.log(`✅ Record ${id} updated successfully in ${fileName} on S3`);
   } catch (error) {
     console.error('❌ Error in saveRecordToFile:', error);
     throw error;
@@ -308,8 +299,7 @@ export async function getQuestion(id: string): Promise<QAResponseIndividual | nu
     // Search all process group files in parallel
     const searchPromises = Object.values(PROCESS_GROUP_FILES).map(async (fileName) => {
       try {
-        const filePath = path.join(__dirname, '..', 'questions', fileName);
-        const fileContent = await fs.readFile(filePath, 'utf-8');
+        const fileContent = await getFileFromS3(fileName);
         
         // Extract the JSON data from the TypeScript export
         const jsonMatch = fileContent.match(/export const questionsData = ({[\s\S]*});/);
@@ -322,7 +312,7 @@ export async function getQuestion(id: string): Promise<QAResponseIndividual | nu
         
         return question || null;
       } catch (error) {
-        console.error(`Error reading file ${fileName}:`, error);
+        console.error(`Error reading file ${fileName} from S3:`, error);
         return null;
       }
     });
@@ -362,10 +352,8 @@ export async function deleteQuestion(questionId: string, processGroup: string): 
       throw new Error('Invalid process_group');
     }
     
-    const filePath = path.join(__dirname, '..', 'questions', fileName);
-    
-    // Read the current file content
-    const fileContent = await fs.readFile(filePath, 'utf-8');
+    // Read the current file content from S3
+    const fileContent = await getFileFromS3(fileName);
     
     // Extract the JSON data from the TypeScript export
     const jsonMatch = fileContent.match(/export const questionsData = ({[\s\S]*});/);
@@ -384,15 +372,15 @@ export async function deleteQuestion(questionId: string, processGroup: string): 
     // Remove the question from the array
     data.questions.splice(questionIndex, 1);
     
-    // Write the updated content back to file
+    // Write the updated content back to S3
     const updatedContent = fileContent.replace(
       /export const questionsData = {[\s\S]*};/,
       `export const questionsData = ${JSON.stringify(data, null, 2)};`
     );
     
-    await fs.writeFile(filePath, updatedContent, 'utf-8');
+    await putFileToS3(fileName, updatedContent);
     
-    console.log(`✅ Question ${questionId} deleted successfully from ${fileName}`);
+    console.log(`✅ Question ${questionId} deleted successfully from ${fileName} on S3`);
   } catch (error) {
     console.error('❌ Error in deleteQuestion:', error);
     throw error;
@@ -400,4 +388,4 @@ export async function deleteQuestion(questionId: string, processGroup: string): 
 }
 
 // Export the interface
-export type { QAResponseIndividual }; 
+export type { QAResponseIndividual };

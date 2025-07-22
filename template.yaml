@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: PMP Question Service API
+Description: PMP Question Service API - Lambda Only
 
 Globals:
   Function:
@@ -11,98 +11,66 @@ Globals:
       Variables:
         NODE_ENV: production
         API_KEY: pmp_service_key_2024
+        S3_BUCKET_NAME: !Ref PMPQuestionBucket
+        CUSTOM_AWS_REGION: !Ref AWS::Region
 
 Resources:
+  PMPQuestionBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "pmp-question-service-${AWS::AccountId}-${AWS::Region}"
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+
   PMPQuestionFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./
       Handler: dist/api/lambda.lambdaHandler
       Description: PMP Question Service API Lambda Function
+      # Simple HTTP API endpoint with no API Gateway customization
       Events:
-        Api:
-          Type: Api
+        HttpApi:
+          Type: HttpApi
           Properties:
             Path: /{proxy+}
             Method: ANY
-            RestApiId: !Ref PMPApi
         RootApi:
-          Type: Api
+          Type: HttpApi
           Properties:
             Path: /
             Method: ANY
-            RestApiId: !Ref PMPApi
-
-  PMPApi:
-    Type: AWS::Serverless::Api
-    Properties:
-      StageName: prod
-      Cors:
-        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,X-API-Key'"
-        AllowOrigin: "'*'"
-      Auth:
-        DefaultAuthorizer: ApiKeyAuthorizer
-        AddDefaultAuthorizerToCorsPreflight: false
-
-  ApiKeyAuthorizer:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: ./
-      Handler: dist/api/auth.lambdaAuthorizer
-      Runtime: nodejs18.x
-      Timeout: 10
-      Environment:
-        Variables:
-          API_KEY: pmp_service_key_2024
-
-  PMPApiKey:
-    Type: AWS::ApiGateway::ApiKey
-    Properties:
-      Name: PMP-Service-API-Key
-      Description: API Key for PMP Question Service
-      Enabled: true
-      StageKeys:
-        - RestApiId: !Ref PMPApi
-          StageName: prod
-
-  PMPUsagePlan:
-    Type: AWS::ApiGateway::UsagePlan
-    Properties:
-      UsagePlanName: PMP-Service-Usage-Plan
-      Description: Usage plan for PMP Question Service
-      ApiStages:
-        - ApiId: !Ref PMPApi
-          Stage: prod
-      Throttle:
-        RateLimit: 100
-        BurstLimit: 200
-      Quota:
-        Limit: 10000
-        Period: DAY
-
-  PMPUsagePlanKey:
-    Type: AWS::ApiGateway::UsagePlanKey
-    Properties:
-      KeyId: !Ref PMPApiKey
-      KeyType: API_KEY
-      UsagePlanId: !Ref PMPUsagePlan
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref PMPQuestionBucket
+        - S3WritePolicy:
+            BucketName: !Ref PMPQuestionBucket
 
 Outputs:
-  PMPQuestionApi:
-    Description: "API Gateway endpoint URL for PMP Question Service"
-    Value: !Sub "https://${PMPApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"
-    Export:
-      Name: !Sub "${AWS::StackName}-ApiUrl"
-
   PMPQuestionFunction:
     Description: "PMP Question Service Lambda Function ARN"
     Value: !GetAtt PMPQuestionFunction.Arn
     Export:
       Name: !Sub "${AWS::StackName}-FunctionArn"
 
-  PMPApiKey:
-    Description: "API Key for PMP Question Service"
-    Value: !Ref PMPApiKey
+  PMPQuestionApi:
+    Description: "API Gateway endpoint URL for PMP Question Service"
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/"
     Export:
-      Name: !Sub "${AWS::StackName}-ApiKey" 
+      Name: !Sub "${AWS::StackName}-ApiUrl"
+      
+  PMPQuestionBucketName:
+    Description: "S3 Bucket for PMP Questions"
+    Value: !Ref PMPQuestionBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-BucketName"
