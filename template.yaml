@@ -27,7 +27,155 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
 
-  # Main Lambda Function (no API key required)
+  # API Gateway
+  PMPRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: PMP-Question-Service-API
+      Description: API Gateway for PMP Question Service
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Gateway Resource
+  PMPApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PMPRestApi
+      ParentId: !GetAtt PMPRestApi.RootResourceId
+      PathPart: '{proxy+}'
+
+  # API Gateway Method (requires API key)
+  PMPApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PMPRestApi
+      ResourceId: !Ref PMPApiResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PMPQuestionFunction.Arn}/invocations'
+
+  # OPTIONS method for CORS (no API key required)
+  PMPApiOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PMPRestApi
+      ResourceId: !Ref PMPApiResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-API-Key,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  # Root resource methods
+  PMPRootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PMPRestApi
+      ResourceId: !GetAtt PMPRestApi.RootResourceId
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PMPQuestionFunction.Arn}/invocations'
+
+  PMPRootOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PMPRestApi
+      ResourceId: !GetAtt PMPRestApi.RootResourceId
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-API-Key,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  # API Gateway Deployment
+  PMPApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - PMPApiMethod
+      - PMPApiOptionsMethod
+      - PMPRootMethod
+      - PMPRootOptionsMethod
+    Properties:
+      RestApiId: !Ref PMPRestApi
+      StageName: prod
+
+  # API Key
+  PMPApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: PMP-Service-API-Key
+      Description: API Key for PMP Question Service
+      Enabled: true
+
+  # Usage Plan
+  PMPUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: PMPApiDeployment
+    Properties:
+      UsagePlanName: PMP-Service-Usage-Plan
+      Description: Usage plan for PMP Question Service
+      ApiStages:
+        - ApiId: !Ref PMPRestApi
+          Stage: prod
+      Throttle:
+        RateLimit: 100
+        BurstLimit: 200
+
+  # Associate API Key with Usage Plan
+  PMPUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref PMPApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref PMPUsagePlan
+
+  # Lambda permission for API Gateway
+  PMPLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PMPQuestionFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PMPRestApi}/*/*'
+
+  # Main Lambda Function
   PMPQuestionFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -44,17 +192,6 @@ Resources:
             - "*"
           AllowOrigins:
             - "*"
-      Events:
-        HttpApi:
-          Type: HttpApi
-          Properties:
-            Path: /{proxy+}
-            Method: ANY
-        RootApi:
-          Type: HttpApi
-          Properties:
-            Path: /
-            Method: ANY
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref PMPQuestionBucket
@@ -69,10 +206,16 @@ Outputs:
       Name: !Sub "${AWS::StackName}-FunctionArn"
 
   PMPQuestionApi:
-    Description: "HTTP API endpoint URL for PMP Question Service"
-    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/"
+    Description: "API Gateway endpoint URL for PMP Question Service"
+    Value: !Sub "https://${PMPRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"
     Export:
       Name: !Sub "${AWS::StackName}-ApiUrl"
+      
+  PMPApiKeyValue:
+    Description: "API Key for PMP Question Service"
+    Value: !Ref PMPApiKey
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiKey"
       
   PMPQuestionFunctionUrl:
     Description: "Lambda Function URL for PMP Question Service"

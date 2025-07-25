@@ -1,5 +1,5 @@
 import express from 'express';
-import cors from 'cors';
+// import cors from 'cors'; // Removed - API Gateway handles CORS
 import helmet from 'helmet';
 import morgan from 'morgan';
 import routes from './routes.js';
@@ -11,21 +11,7 @@ const PORT = process.env["PORT"] || 3030;
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'X-API-Key'],
-  credentials: false
-}));
-
-// Handle preflight OPTIONS requests
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, X-API-Key');
-  res.sendStatus(200);
-});
+// CORS is handled by API Gateway - no Express CORS needed
 
 // Logging middleware
 app.use(morgan('combined', {
