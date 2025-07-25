@@ -58,11 +58,13 @@ router.use(logRequest);
  */
 router.get('/pmp-questions', async (req, res) => {
   try {
+    const user = req.query["user"] as string || 'guest';
+    
     const params: RetrieveParams = {
       processGroup: req.query["processGroup"] as string,
       knowledgeArea: req.query["knowledgeArea"] as string,
       count: req.query["count"] ? parseInt(req.query["count"] as string) : undefined,
-      user: 'guest',
+      user: user,
       ...(req.query["isValid"] !== undefined ? { isValid: req.query["isValid"] === 'true' } : {})
     };
 
