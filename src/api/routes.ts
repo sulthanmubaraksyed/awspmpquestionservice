@@ -56,22 +56,15 @@ router.use(logRequest);
  * @apiError (401) Unauthorized API key is missing
  * @apiError (403) Forbidden Invalid API key
  */
-router.get('/pmp-questions', requireApiKey, async (req, res) => {
+router.get('/pmp-questions', async (req, res) => {
   try {
-    console.log('=== ROUTE DEBUG ===');
-    console.log('Query parameters received:', req.query);
-    console.log('isValid query param:', req.query["isValid"]);
-    console.log('isValid type:', typeof req.query["isValid"]);
-    
     const params: RetrieveParams = {
       processGroup: req.query["processGroup"] as string,
       knowledgeArea: req.query["knowledgeArea"] as string,
       count: req.query["count"] ? parseInt(req.query["count"] as string) : undefined,
+      user: 'guest',
       ...(req.query["isValid"] !== undefined ? { isValid: req.query["isValid"] === 'true' } : {})
     };
-
-    console.log('Params object created:', params);
-    console.log('=== END ROUTE DEBUG ===');
 
     logger.info('PMP Questions API called', { params });
     const questions = await retrieveRecordsFromFile(params);
@@ -99,7 +92,7 @@ router.get('/pmp-questions', requireApiKey, async (req, res) => {
  * @apiError (401) Unauthorized API key is missing
  * @apiError (403) Forbidden Invalid API key
  */
-router.get('/api-keys', requireApiKey, (req, res) => {
+router.get('/api-keys', (req, res) => {
   logger.info('API Keys list requested');
   const keys = listApiKeys();
   res.json({ keys });
@@ -174,7 +167,7 @@ const saveRecordHandler: RequestHandler = async (req, res) => {
   }
 };
 
-router.post('/saveRecord', requireApiKey, saveRecordHandler);
+router.post('/saveRecord', saveRecordHandler);
 
 /**
  * @api {get} /api/getQuestion Get Question by ID
@@ -221,7 +214,7 @@ const getQuestionHandler: RequestHandler = async (req, res) => {
   }
 };
 
-router.get('/getQuestion', requireApiKey, getQuestionHandler);
+router.get('/getQuestion', getQuestionHandler);
 
 /**
  * @api {delete} /api/deleteQuestion Delete Question by ID and Process Group
@@ -279,6 +272,6 @@ const deleteQuestionHandler: RequestHandler = async (req, res) => {
   }
 };
 
-router.delete('/deleteQuestion', requireApiKey, deleteQuestionHandler);
+router.delete('/deleteQuestion', deleteQuestionHandler);
 
 export default router; 

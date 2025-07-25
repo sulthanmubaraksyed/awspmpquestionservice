@@ -11,7 +11,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "package": "npm run build && sam build",
     "deploy": "sam deploy --guided",
-    "upload-questions": "node --loader ts-node/esm src/scripts/uploadQuestionsToS3.ts"
+    "upload-questions": "node --loader ts-node/esm src/scripts/uploadQuestionsToS3.ts",
+    "create-sample": "node --loader ts-node/esm src/scripts/createSampleQuestions.ts"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -37,6 +37,7 @@ export interface RetrieveParams {
   tool?: string;
   count?: number;
   isValid?: boolean;
+  user?: string;
 }
 
 export interface BaseQuestion {

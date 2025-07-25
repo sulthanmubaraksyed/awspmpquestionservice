@@ -60,48 +60,72 @@ export async function retrieveRecordsFromFile({
   knowledgeArea, 
   tool, 
   count = 100,
-  isValid // This parameter is ignored - we always filter for is_valid === false
+  isValid, // This parameter is ignored - we always filter for is_valid === false
+  user = 'guest'
 }: RetrieveParams): Promise<QAResponseIndividual[]> {
   try {
     console.log('🚨🚨🚨 UPDATED CODE IS RUNNING - FILTERING FOR is_valid === false 🚨🚨🚨');
     console.log('=== retrieveRecordsFromFile Service Call Started ===');
-    console.log('Parameters:', { processGroup, knowledgeArea, tool, count, isValid });
+    console.log('Parameters:', { processGroup, knowledgeArea, tool, count, isValid, user });
     console.log('🚨🚨🚨 NOTE: isValid parameter is IGNORED - always filtering for is_valid === false 🚨🚨🚨');
     
     let allQuestions: QAResponseIndividual[] = [];
     
-    // Determine which files to read based on processGroup
-    const filesToRead = processGroup && processGroup !== 'all' 
-      ? [PROCESS_GROUP_FILES[processGroup as keyof typeof PROCESS_GROUP_FILES]]
-      : Object.values(PROCESS_GROUP_FILES);
-    
-    console.log('Files to read from S3:', filesToRead);
-    
-    // Read questions from all relevant files
-    for (const fileName of filesToRead) {
-      if (!fileName) continue;
-      
+    // If user is 'guest', return ALL questions from sample.ts without any filtering
+    if (user === 'guest') {
+      console.log('Guest user detected - loading ALL questions from sample.ts');
       try {
-        console.log(`Reading file from S3: ${fileName}`);
-        
-        const fileContent = await getFileFromS3(fileName);
-        
-        // Extract the JSON data from the TypeScript export
+        const fileContent = await getFileFromS3('sample.ts');
         const jsonMatch = fileContent.match(/export const questionsData = ({[\s\S]*});/);
-        if (!jsonMatch) {
-          console.warn(`Invalid file format in ${fileName}`);
+        if (jsonMatch) {
+          const data = JSON.parse(jsonMatch[1]);
+          allQuestions = data.questions || [];
+          console.log(`Loaded ALL ${allQuestions.length} questions from sample.ts for guest user`);
+          console.log('=== retrieveRecordsFromFile Service Call Completed Successfully ===');
+          return allQuestions;
+        }
+      } catch (error) {
+        console.error('Error reading sample.ts from S3:', error);
+        // Fallback to regular logic if sample.ts is not available
+      }
+    }
+    
+    // For admin or other users, or if sample.ts failed to load, use regular logic
+    if (user !== 'guest' || allQuestions.length === 0) {
+      console.log('Loading from regular question files');
+      // Determine which files to read based on processGroup
+      const filesToRead = processGroup && processGroup !== 'all' 
+        ? [PROCESS_GROUP_FILES[processGroup as keyof typeof PROCESS_GROUP_FILES]]
+        : Object.values(PROCESS_GROUP_FILES);
+      
+      console.log('Files to read from S3:', filesToRead);
+      
+      // Read questions from all relevant files
+      for (const fileName of filesToRead) {
+        if (!fileName) continue;
+        
+        try {
+          console.log(`Reading file from S3: ${fileName}`);
+          
+          const fileContent = await getFileFromS3(fileName);
+          
+          // Extract the JSON data from the TypeScript export
+          const jsonMatch = fileContent.match(/export const questionsData = ({[\s\S]*});/);
+          if (!jsonMatch) {
+            console.warn(`Invalid file format in ${fileName}`);
+            continue;
+          }
+          
+          const data = JSON.parse(jsonMatch[1]);
+          const fileQuestions = data.questions || [];
+          
+          console.log(`Found ${fileQuestions.length} questions in ${fileName}`);
+          allQuestions.push(...fileQuestions);
+          
+        } catch (fileError) {
+          console.error(`Error reading file ${fileName} from S3:`, fileError);
           continue;
         }
-        
-        const data = JSON.parse(jsonMatch[1]);
-        const fileQuestions = data.questions || [];
-        
-        console.log(`Found ${fileQuestions.length} questions in ${fileName}`);
-        allQuestions.push(...fileQuestions);
-        
-      } catch (fileError) {
-        console.error(`Error reading file ${fileName} from S3:`, fileError);
-        continue;
       }
     }
     

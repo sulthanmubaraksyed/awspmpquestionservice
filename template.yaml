@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: PMP Question Service API - Lambda Only
+Description: PMP Question Service - Lambda with S3
 
 Globals:
   Function:
@@ -10,35 +10,40 @@ Globals:
     Environment:
       Variables:
         NODE_ENV: production
-        API_KEY: pmp_service_key_2024
         S3_BUCKET_NAME: !Ref PMPQuestionBucket
         CUSTOM_AWS_REGION: !Ref AWS::Region
 
 Resources:
+  # S3 Bucket for storing questions
   PMPQuestionBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "pmp-question-service-${AWS::AccountId}-${AWS::Region}"
-      AccessControl: Private
+      BucketName: !Sub "pmp-questions-${AWS::AccountId}-${AWS::Region}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldVersions
-            Status: Enabled
-            NoncurrentVersionExpiration:
-              NoncurrentDays: 30
+      VersioningConfiguration:
+        Status: Enabled
 
+  # Main Lambda Function (no API key required)
   PMPQuestionFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./
       Handler: dist/api/lambda.lambdaHandler
       Description: PMP Question Service API Lambda Function
-      # Simple HTTP API endpoint with no API Gateway customization
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowCredentials: false
+          AllowHeaders:
+            - "*"
+          AllowMethods:
+            - "*"
+          AllowOrigins:
+            - "*"
       Events:
         HttpApi:
           Type: HttpApi
@@ -64,10 +69,16 @@ Outputs:
       Name: !Sub "${AWS::StackName}-FunctionArn"
 
   PMPQuestionApi:
-    Description: "API Gateway endpoint URL for PMP Question Service"
+    Description: "HTTP API endpoint URL for PMP Question Service"
     Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/"
     Export:
       Name: !Sub "${AWS::StackName}-ApiUrl"
+      
+  PMPQuestionFunctionUrl:
+    Description: "Lambda Function URL for PMP Question Service"
+    Value: !GetAtt PMPQuestionFunctionUrl.FunctionUrl
+    Export:
+      Name: !Sub "${AWS::StackName}-FunctionUrl"
       
   PMPQuestionBucketName:
     Description: "S3 Bucket for PMP Questions"
